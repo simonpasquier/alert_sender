@@ -26,12 +26,14 @@ import (
 	"gopkg.in/yaml.v2"
 
 	"github.com/simonpasquier/alert_sender/client"
+	"github.com/simonpasquier/alert_sender/receiver"
 )
 
 var (
 	help     bool
 	ams      string
 	planFile string
+	listen   string
 )
 
 const (
@@ -43,6 +45,7 @@ func init() {
 	flag.BoolVar(&help, "help", false, "Help message")
 	flag.StringVar(&ams, "addresses", "", "Comma-separated list of AlertManager servers.")
 	flag.StringVar(&planFile, "plan", "", "Plan file (YAML format).")
+	flag.StringVar(&listen, "listen", ":8080", "Listen address for the webhook receiver.")
 }
 
 type template struct {
@@ -103,6 +106,8 @@ func main() {
 	}
 
 	builder := client.NewBuilder("xxx")
+	wh := receiver.NewWebhook(listen, l)
+	go wh.Run()
 
 	for _, s := range p.Steps {
 		alerts := make([]cli.Alert, len(s.Alerts))
@@ -121,10 +126,11 @@ func main() {
 			alerts[i] = builder.CreateAlert(t.Labels, t.Annotations, t.StartsAt, t.EndsAt)
 		}
 
-		l.Printf("Step %q", s.Description)
+		l.Printf("step=%q", s.Description)
 		c := client.NewSender(s.Runs, len(alerts), s.Repeat, l)
 		if err := c.Send(strings.Split(ams, ","), alerts); err != nil {
 			l.Fatal(err)
 		}
 	}
+	wh.Stop()
 }
