@@ -14,7 +14,6 @@
 package main
 
 import (
-	"context"
 	"flag"
 	"fmt"
 	"log"
@@ -24,7 +23,8 @@ import (
 	"time"
 
 	"github.com/prometheus/alertmanager/cli"
-	"github.com/prometheus/client_golang/api"
+
+	"github.com/simonpasquier/alert_sender/client"
 )
 
 var (
@@ -85,31 +85,21 @@ func buildAlertSlice(n int, lbls, anns string, start, end time.Time) []cli.Alert
 }
 
 func main() {
+	l := log.New(os.Stderr, "", log.Ltime|log.Lshortfile)
 	flag.Parse()
 	if help || ams == "" {
-		log.Println("send_alerts: fire alerts to AlertManager and then resolve them.")
+		l.Println("send_alerts: fire alerts to AlertManager and then resolve them.")
 		flag.PrintDefaults()
 		os.Exit(0)
 	}
 
 	if batch <= 0 || num <= 0 {
-		log.Fatal("Invalid option")
+		l.Fatal("Invalid option")
 	}
 
 	repeat, err := time.ParseDuration(repeatInterval)
 	if err != nil {
-		log.Fatal("Cannot parse interval:", err)
-	}
-
-	var alertmanagers []api.Client
-	for _, am := range strings.Split(ams, ",") {
-		client, err := api.NewClient(api.Config{
-			Address: fmt.Sprintf("http://%s", am),
-		})
-		if err != nil {
-			log.Fatal("failed to create AlertManager client:", err)
-		}
-		alertmanagers = append(alertmanagers, client)
+		l.Fatal("Cannot parse interval:", err)
 	}
 
 	var start, end time.Time
@@ -125,35 +115,8 @@ func main() {
 	}
 	alerts := buildAlertSlice(num, lbls, anns, start, end)
 
-	sleep := time.NewTimer(0)
-	for ; runs > 0; runs-- {
-		sleep.Reset(repeat)
-		log.Printf("sending %d alert(s)...\n", num)
-		slice := alerts[:]
-		for {
-			if len(slice) == 0 {
-				break
-			}
-
-			upper := batch
-			if len(slice) <= batch {
-				upper = len(slice)
-			}
-
-			ctx, cancel := context.WithTimeout(context.Background(), repeat)
-			for _, am := range alertmanagers {
-				alertAPI := cli.NewAlertAPI(am)
-				if err := alertAPI.Push(ctx, slice[:upper]...); err != nil {
-					log.Println("error sending alerts:", err)
-				}
-			}
-
-			cancel()
-			slice = slice[upper:]
-		}
-
-		select {
-		case <-sleep.C:
-		}
+	c := client.NewAlerter(runs, batch, repeat, l)
+	if err := c.Send(strings.Split(ams, ","), alerts); err != nil {
+		l.Fatal(err)
 	}
 }
