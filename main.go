@@ -1,4 +1,4 @@
-// Copyright 2015 The Prometheus Authors
+// Copyright 2018 Simon Pasquier
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -14,29 +14,28 @@
 package main
 
 import (
-	"bytes"
 	"context"
-	"encoding/json"
 	"flag"
 	"fmt"
 	"log"
-	"net/http"
 	"os"
 	"regexp"
 	"strings"
-	"sync"
 	"time"
 
-	"github.com/prometheus/common/model"
+	"github.com/prometheus/alertmanager/cli"
+	"github.com/prometheus/client_golang/api"
 )
 
 var (
-	help          bool
-	ams           string
-	lbls, anns    string
-	num, interval int
-	batch         int
-	re            = regexp.MustCompile(`\s*(\w+)=(?:\"?([^",]+)\"?)\s*(?:,|$)`)
+	help             bool
+	ams              string
+	lbls, anns       string
+	repeatInterval   string
+	startsAt, endsAt string
+	runs, num        int
+	batch            int
+	re               = regexp.MustCompile(`\s*(\w+)=(?:\"?([^",]+)\"?)\s*(?:,|$)`)
 )
 
 func init() {
@@ -44,65 +43,23 @@ func init() {
 	flag.StringVar(&ams, "addresses", "", "Comma-separated list of AlertManager servers.")
 	flag.StringVar(&lbls, "labels", "AlertName=HighLatency,service=my-service,instance=instance-{{i}}", "Comma-separated list of alert's labels.")
 	flag.StringVar(&anns, "annotations", "Summary=\"High Latency\",Description=\"Latency is high!\"", "Comma-separated list of alert's annotations.")
-	flag.IntVar(&num, "num", 100, "Number of alerts to be sent.")
-	flag.IntVar(&batch, "batch", 10, "Batch size when sending alerts.")
-	flag.IntVar(&interval, "interval", 10, "Interval between alert sending.")
+	flag.IntVar(&runs, "runs", 1, "Total number of runs.")
+	flag.IntVar(&num, "num", 1, "Total number of alerts to be sent at every run.")
+	flag.IntVar(&batch, "batch", 1, "How many alerts to send per batch.")
+	flag.StringVar(&repeatInterval, "repeat-interval", "10s", "Interval before sending the alerts again.")
+	flag.StringVar(&startsAt, "start", "now", "Start time of the alerts (RFC3339 format).")
+	flag.StringVar(&endsAt, "end", "", "End time of the alerts (RFC3339 format). If empty, the end time isn't set. It can be a duration relative to the start time or 'now'.")
 }
 
-func sendAlerts(ctx context.Context, ams []string, alerts ...*model.Alert) error {
-	var wg sync.WaitGroup
+func buildAlertSlice(n int, lbls, anns string, start, end time.Time) []cli.Alert {
+	alerts := make([]cli.Alert, n)
 
-	b, err := json.Marshal(alerts)
-	if err != nil {
-		return err
-	}
-
-	errs := make(chan error, len(ams))
-	for _, am := range ams {
-		wg.Add(1)
-		go func(am string) {
-			defer wg.Done()
-			client := &http.Client{Timeout: time.Duration(5 * time.Second)}
-			req, err := http.NewRequest("POST", "http://"+am+"/api/v1/alerts", bytes.NewReader(b))
-			req.WithContext(ctx)
-			if err != nil {
-				return
-			}
-			req.Header.Set("Content-Type", "application/json")
-			resp, err := client.Do(req)
-			if err != nil {
-				errs <- err
-				return
-			}
-			defer resp.Body.Close()
-
-			// Any HTTP status 2xx is OK.
-			if resp.StatusCode/100 != 2 {
-				errs <- fmt.Errorf("bad response status %v", resp.Status)
-				return
-			}
-		}(am)
-	}
-	go func() {
-		wg.Wait()
-		close(errs)
-	}()
-	err, ok := <-errs
-	if ok {
-		return err
-	}
-	return nil
-}
-
-func buildAlertSlice(n int, lbls, anns string, start, end time.Time) []*model.Alert {
-	alerts := make([]*model.Alert, n)
-
-	expand := func(i int, m map[string]string) model.LabelSet {
-		lblset := model.LabelSet{}
+	expand := func(i int, m map[string]string) cli.LabelSet {
+		lblset := cli.LabelSet{}
 		for k, v := range m {
 			k = strings.Replace(k, "{{i}}", fmt.Sprintf("%d", i), -1)
 			v = strings.Replace(v, "{{i}}", fmt.Sprintf("%d", i), -1)
-			lblset[model.LabelName(k)] = model.LabelValue(v)
+			lblset[cli.LabelName(k)] = cli.LabelValue(v)
 		}
 		return lblset
 	}
@@ -116,7 +73,7 @@ func buildAlertSlice(n int, lbls, anns string, start, end time.Time) []*model.Al
 	}
 
 	for i := range alerts {
-		alerts[i] = &model.Alert{
+		alerts[i] = cli.Alert{
 			Labels:      expand(i, labels),
 			Annotations: expand(i, annotations),
 			StartsAt:    start,
@@ -139,11 +96,39 @@ func main() {
 		log.Fatal("Invalid option")
 	}
 
-	alertmanagers := strings.Split(ams, ",")
-	alerts := buildAlertSlice(num, lbls, anns, time.Now(), time.Time{})
+	repeat, err := time.ParseDuration(repeatInterval)
+	if err != nil {
+		log.Fatal("Cannot parse interval:", err)
+	}
 
-	for {
-		log.Println("sending alerts...")
+	var alertmanagers []api.Client
+	for _, am := range strings.Split(ams, ",") {
+		client, err := api.NewClient(api.Config{
+			Address: fmt.Sprintf("http://%s", am),
+		})
+		if err != nil {
+			log.Fatal("failed to create AlertManager client:", err)
+		}
+		alertmanagers = append(alertmanagers, client)
+	}
+
+	var start, end time.Time
+	if start, err = time.Parse(time.RFC3339, startsAt); err != nil {
+		start = time.Now()
+	}
+	if end, err = time.Parse(time.RFC3339, endsAt); err != nil {
+		if d, err := time.ParseDuration(endsAt); err == nil {
+			end = start.Add(d)
+		} else if endsAt == "now" {
+			end = time.Now()
+		}
+	}
+	alerts := buildAlertSlice(num, lbls, anns, start, end)
+
+	sleep := time.NewTimer(0)
+	for ; runs > 0; runs-- {
+		sleep.Reset(repeat)
+		log.Printf("sending %d alert(s)...\n", num)
 		slice := alerts[:]
 		for {
 			if len(slice) == 0 {
@@ -151,21 +136,24 @@ func main() {
 			}
 
 			upper := batch
-			if len(slice) < batch {
+			if len(slice) <= batch {
 				upper = len(slice)
 			}
 
-			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-			err := sendAlerts(ctx, alertmanagers, slice[:upper]...)
-			if err != nil {
-				log.Println("error sending alerts:", err)
+			ctx, cancel := context.WithTimeout(context.Background(), repeat)
+			for _, am := range alertmanagers {
+				alertAPI := cli.NewAlertAPI(am)
+				if err := alertAPI.Push(ctx, slice[:upper]...); err != nil {
+					log.Println("error sending alerts:", err)
+				}
 			}
+
 			cancel()
 			slice = slice[upper:]
 		}
 
 		select {
-		case <-time.After(time.Duration(interval) * time.Second):
+		case <-sleep.C:
 		}
 	}
 }
