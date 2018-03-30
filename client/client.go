@@ -10,17 +10,17 @@ import (
 	"github.com/prometheus/client_golang/api"
 )
 
-// Alerter is used to send alerts on a regular basis.
-type Alerter struct {
+// Sender is used to send alerts on a regular basis.
+type Sender struct {
 	runs     int
 	batch    int
 	interval time.Duration
 	l        *log.Logger
 }
 
-// NewAlerter returns an Alerter struct.
-func NewAlerter(runs, batch int, interval time.Duration, l *log.Logger) *Alerter {
-	return &Alerter{
+// NewSender returns a Sender instance.
+func NewSender(runs, batch int, interval time.Duration, l *log.Logger) *Sender {
+	return &Sender{
 		runs:     runs,
 		batch:    batch,
 		interval: interval,
@@ -29,7 +29,7 @@ func NewAlerter(runs, batch int, interval time.Duration, l *log.Logger) *Alerter
 }
 
 // Send sends alerts to the AlertManager instances.
-func (a *Alerter) Send(ams []string, alerts []cli.Alert) error {
+func (a *Sender) Send(ams []string, alerts []cli.Alert) error {
 	var alertmanagers []api.Client
 	for _, am := range ams {
 		client, err := api.NewClient(api.Config{

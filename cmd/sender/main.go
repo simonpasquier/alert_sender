@@ -52,17 +52,8 @@ func init() {
 }
 
 func buildAlertSlice(n int, lbls, anns string, start, end time.Time) []cli.Alert {
+	builder := client.NewBuilder("xxx")
 	alerts := make([]cli.Alert, n)
-
-	expand := func(i int, m map[string]string) cli.LabelSet {
-		lblset := cli.LabelSet{}
-		for k, v := range m {
-			k = strings.Replace(k, "{{i}}", fmt.Sprintf("%d", i), -1)
-			v = strings.Replace(v, "{{i}}", fmt.Sprintf("%d", i), -1)
-			lblset[cli.LabelName(k)] = cli.LabelValue(v)
-		}
-		return lblset
-	}
 
 	labels, annotations := map[string]string{}, map[string]string{}
 	for _, s := range re.FindAllStringSubmatch(lbls, -1) {
@@ -72,13 +63,18 @@ func buildAlertSlice(n int, lbls, anns string, start, end time.Time) []cli.Alert
 		annotations[s[1]] = s[2]
 	}
 
-	for i := range alerts {
-		alerts[i] = cli.Alert{
-			Labels:      expand(i, labels),
-			Annotations: expand(i, annotations),
-			StartsAt:    start,
-			EndsAt:      end,
+	expand := func(i int, m map[string]string) map[string]string {
+		set := map[string]string{}
+		for k, v := range m {
+			k = strings.Replace(k, "{{i}}", fmt.Sprintf("%d", i), -1)
+			v = strings.Replace(v, "{{i}}", fmt.Sprintf("%d", i), -1)
+			set[k] = v
 		}
+		return set
+	}
+
+	for i := range alerts {
+		alerts[i] = builder.CreateAlert(expand(i, labels), expand(i, annotations), start, end)
 	}
 
 	return alerts
@@ -88,7 +84,7 @@ func main() {
 	l := log.New(os.Stderr, "", log.Ltime|log.Lshortfile)
 	flag.Parse()
 	if help || ams == "" {
-		l.Println("send_alerts: fire alerts to AlertManager and then resolve them.")
+		l.Println("sender: send alerts to AlertManager.")
 		flag.PrintDefaults()
 		os.Exit(0)
 	}
@@ -115,7 +111,7 @@ func main() {
 	}
 	alerts := buildAlertSlice(num, lbls, anns, start, end)
 
-	c := client.NewAlerter(runs, batch, repeat, l)
+	c := client.NewSender(runs, batch, repeat, l)
 	if err := c.Send(strings.Split(ams, ","), alerts); err != nil {
 		l.Fatal(err)
 	}

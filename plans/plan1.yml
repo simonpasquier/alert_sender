@@ -1,0 +1,51 @@
+# Plan for testing inhibited alerts
+---
+templates:
+  service-warning:
+    labels:
+      AlertName: HighLatency
+      job: my-service
+      severity: warning
+    annotations:
+      description: Latency is high!
+      summary: High Latency
+  service-critical:
+    labels:
+      AlertName: HighLatency
+      job: my-service
+      severity: critical
+    annotations:
+      description: Latency is high!
+      summary: High Latency
+
+steps:
+  - runs: 3
+    repeat: 10s
+    alerts:
+    - ref: service-warning
+      status: firing
+    description: "Active warning alert"
+  - runs: 3
+    repeat: 10s
+    alerts:
+    - ref: service-warning
+      status: firing
+    - ref: service-critical
+      status: firing
+    description: "Active critical & warning alerts"
+  - runs: 3
+    repeat: 10s
+    alerts:
+    - ref: service-warning
+      status: firing
+    - ref: service-critical
+      status: resolved
+    description: "Resolved critical alert & active warning alert"
+  - runs: 3
+    repeat: 10s
+    alerts:
+    - ref: service-warning
+      status: resolved
+    - ref: service-critical
+      status: resolved
+    description: "Resolved critical & warning alerts"
