@@ -105,7 +105,7 @@ func main() {
 		l.Fatalf("fail to parse plan: %s", err)
 	}
 
-	builder := client.NewBuilder("xxx")
+	builder := client.NewBuilder()
 	wh := receiver.NewWebhook(listen, l)
 	go wh.Run()
 

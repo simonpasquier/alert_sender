@@ -52,7 +52,7 @@ func init() {
 }
 
 func buildAlertSlice(n int, lbls, anns string, start, end time.Time) []cli.Alert {
-	builder := client.NewBuilder("xxx")
+	builder := client.NewBuilder()
 	alerts := make([]cli.Alert, n)
 
 	labels, annotations := map[string]string{}, map[string]string{}

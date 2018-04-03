@@ -12,8 +12,8 @@ type Builder struct {
 }
 
 // NewBuilder returns a Builder instance.
-func NewBuilder(id string) *Builder {
-	return &Builder{generator: id}
+func NewBuilder() *Builder {
+	return &Builder{generator: "http://example.com/"}
 }
 
 // CreateAlert returns a single alert.
