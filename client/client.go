@@ -28,6 +28,25 @@ func NewSender(runs, batch int, interval time.Duration, l *log.Logger) *Sender {
 	}
 }
 
+// Version returns the version of the AlertManager instance.
+func Version(am string) (string, error) {
+	client, err := api.NewClient(api.Config{
+		Address: fmt.Sprintf("http://%s", am),
+	})
+	if err != nil {
+		return "", fmt.Errorf("failed to create client: %s: %s", am, err)
+	}
+	status := cli.NewStatusAPI(client)
+	ctx := context.Background()
+	s, err := status.Get(ctx)
+	if err != nil {
+		return "", fmt.Errorf("failed to query client: %s: %s", am, err)
+	}
+
+	info := s.VersionInfo
+	return fmt.Sprintf("%s (branch: %s, rev: %s)", info["version"], info["branch"], info["revision"]), nil
+}
+
 // Send sends alerts to the AlertManager instances.
 func (a *Sender) Send(ams []string, alerts []cli.Alert) error {
 	var alertmanagers []api.Client
@@ -45,7 +64,7 @@ func (a *Sender) Send(ams []string, alerts []cli.Alert) error {
 	for i := a.runs; i > 0; i-- {
 		sleep.Reset(a.interval)
 
-		a.l.Printf("sending %d alert(s)...\n", len(alerts))
+		a.l.Printf("msg=%q", fmt.Sprintf("sending %d alert(s)", len(alerts)))
 		slice := alerts[:]
 		for {
 			if len(slice) == 0 {

@@ -5,13 +5,16 @@ import (
 	"encoding/json"
 	"io/ioutil"
 	"log"
+	"net"
 	"net/http"
 	"time"
 
 	"github.com/prometheus/alertmanager/cli"
 )
 
-type notification struct {
+// Notification represents an AlertManager notification.
+type Notification struct {
+	Timestamp    time.Time         `json:"timestamp"`
 	GroupKey     string            `json:"groupKey"`
 	Receiver     string            `json:"receiver"`
 	Status       string            `json:"status"`
@@ -25,13 +28,13 @@ type notification struct {
 type Webhook struct {
 	srv *http.Server
 	l   *log.Logger
-	nf  []notification
+	nf  []Notification
 }
 
 // NewWebhook returns a webhook receiver.
-func NewWebhook(addr string, l *log.Logger) *Webhook {
+func NewWebhook(l *log.Logger) *Webhook {
 	return &Webhook{
-		srv: &http.Server{Addr: addr},
+		srv: &http.Server{},
 		l:   l,
 	}
 }
@@ -43,32 +46,37 @@ func (w *Webhook) serve(_ http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var nf notification
+	var nf Notification
 	err = json.Unmarshal(b, &nf)
 	if err != nil {
 		w.l.Printf("fail to decode body: %s", err)
 	}
+	nf.Timestamp = time.Now().UTC()
 	w.nf = append(w.nf, nf)
-	w.l.Printf("gkey=%q status=%q", nf.GroupKey, nf.Status)
+	w.l.Printf("msg=%q gkey=%q status=%q", "received notification", nf.GroupKey, nf.Status)
 }
 
 // Run runs the webhook receiver.
-func (w *Webhook) Run() error {
+func (w *Webhook) Run(addr string) error {
 	http.HandleFunc("/", w.serve)
-	return w.srv.ListenAndServe()
+
+	ln, err := net.Listen("tcp", addr)
+	if err != nil {
+		w.l.Fatal(err)
+	}
+
+	return w.srv.Serve(ln)
 }
 
 // Stop stops the webhook receiver.
 func (w *Webhook) Stop() {
-	w.l.Println("Stopping the webhook receiver")
+	w.l.Printf("msg=%q", "Stopping the webhook receiver")
 	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(5*time.Second))
 	w.srv.Shutdown(ctx)
 	cancel()
 }
 
-// Print logs the notifications received from AlertManager.
-func (w *Webhook) Print() {
-	for _, nf := range w.nf {
-		w.l.Printf("%v", nf)
-	}
+// Notifications returns the notifications received from AlertManager.
+func (w *Webhook) Notifications() []Notification {
+	return w.nf
 }

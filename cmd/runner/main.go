@@ -14,11 +14,13 @@
 package main
 
 import (
+	"bufio"
 	"flag"
 	"fmt"
 	"io/ioutil"
 	"log"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -68,8 +70,8 @@ type step struct {
 }
 
 type plan struct {
-	Templates map[string]template `yaml:"templates"`
-	Steps     []step              `yaml:"steps"`
+	Templates map[string]*template `yaml:"templates"`
+	Steps     []step               `yaml:"steps"`
 }
 
 func (a *alert) UnmarshalYAML(unmarshal func(interface{}) error) error {
@@ -105,16 +107,25 @@ func main() {
 		l.Fatalf("fail to parse plan: %s", err)
 	}
 
+	alertmanagers := strings.Split(ams, ",")
+	for _, am := range alertmanagers {
+		version, err := client.Version(am)
+		if err != nil {
+			l.Fatalf("fail to query alertmanager: %s", err)
+		}
+		l.Printf("address=%q version=%q", am, version)
+	}
+
 	builder := client.NewBuilder()
-	wh := receiver.NewWebhook(listen, l)
-	go wh.Run()
+	wh := receiver.NewWebhook(l)
+	go wh.Run(listen)
 
 	for _, s := range p.Steps {
 		alerts := make([]cli.Alert, len(s.Alerts))
 		for i, a := range s.Alerts {
 			t, ok := p.Templates[a.Ref]
 			if !ok {
-				l.Println("cannot find reference:", a.Ref)
+				l.Printf("msg=%q", fmt.Sprintf("cannot find reference: %s", a.Ref))
 				continue
 			}
 			if t.StartsAt.IsZero() && a.Status == statusFiring {
@@ -126,11 +137,31 @@ func main() {
 			alerts[i] = builder.CreateAlert(t.Labels, t.Annotations, t.StartsAt, t.EndsAt)
 		}
 
-		l.Printf("step=%q", s.Description)
+		l.Printf("msg=%q desc=%q", "running step", s.Description)
 		c := client.NewSender(s.Runs, len(alerts), s.Repeat, l)
-		if err := c.Send(strings.Split(ams, ","), alerts); err != nil {
+		if err := c.Send(alertmanagers, alerts); err != nil {
 			l.Fatal(err)
 		}
 	}
+	l.Printf("msg=%q", "sleeping for 10s")
+	time.Sleep(10 * time.Second)
 	wh.Stop()
+
+	now := time.Now().UTC()
+	fname := filepath.Base(planFile)
+	fname = strings.TrimSuffix(fname, filepath.Ext(fname))
+	fname = fmt.Sprintf("notifications-%s-%s", fname, now.Format("20060102-150405"))
+	f, err := os.Create(fname)
+	if err != nil {
+		log.Fatalf("cannot create %s", fname)
+	}
+	defer f.Close()
+	wr := bufio.NewWriter(f)
+	defer wr.Flush()
+	for _, nf := range wh.Notifications() {
+		fmt.Fprintf(wr, "ts=%q status=%q gkey=%q nb_alerts=%d\n", nf.Timestamp, nf.Status, nf.GroupKey, len(nf.Alerts))
+		for _, a := range nf.Alerts {
+			fmt.Fprintf(wr, "\tstart=%q end=%q labels=%q\n", a.StartsAt, a.EndsAt, a.Labels)
+		}
+	}
 }
