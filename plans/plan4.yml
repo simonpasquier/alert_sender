@@ -24,23 +24,9 @@ steps:
     alerts:
     - ref: service-warning
       status: firing
-    description: "Active warning alert"
-  - runs: 3
-    repeat: 10s
-    alerts:
-    - ref: service-warning
-      status: firing
     - ref: service-critical
       status: firing
     description: "Active critical & warning alerts"
-  - runs: 3
-    repeat: 10s
-    alerts:
-    - ref: service-warning
-      status: firing
-    - ref: service-critical
-      status: resolved
-    description: "Resolved critical alert & active warning alert"
   - runs: 3
     repeat: 10s
     alerts:

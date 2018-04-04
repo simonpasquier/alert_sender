@@ -22,9 +22,9 @@ steps:
   - runs: 3
     repeat: 10s
     alerts:
-    - ref: service-warning
+    - ref: service-critical
       status: firing
-    description: "Active warning alert"
+    description: "Active critical alert"
   - runs: 3
     repeat: 10s
     alerts:
