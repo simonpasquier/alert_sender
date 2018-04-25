@@ -1,0 +1,97 @@
+# Plan for testing inhibited alerts
+---
+templates:
+  service1-warning:
+    labels:
+      alertname: HighLatency
+      job: service1
+      severity: warning
+    annotations:
+      description: Latency is high!
+      summary: High Latency
+  service1-critical:
+    labels:
+      alertname: TooHighLatency
+      job: service1
+      severity: critical
+    annotations:
+      description: Latency is too high!
+      summary: High Latency
+  service2-critical:
+    labels:
+      alertname: TooHighLatency
+      job: service2
+      severity: critical
+    annotations:
+      description: Latency is too high!
+      summary: High Latency
+  service2-warning:
+    labels:
+      alertname: HighLatency
+      job: service2
+      severity: warning
+    annotations:
+      description: Latency is high!
+      summary: High Latency
+
+steps:
+  - runs: 20
+    repeat: 10s
+    alerts:
+    - ref: service1-warning
+      status: firing
+    - ref: service1-critical
+      status: firing
+    - ref: service2-warning
+      status: firing
+    - ref: service2-critical
+      status: firing
+    description: "All alerts active"
+  - runs: 20
+    repeat: 10s
+    alerts:
+    - ref: service1-warning
+      status: resolved
+    - ref: service1-critical
+      status: resolved
+    - ref: service2-warning
+      status: firing
+    - ref: service2-critical
+      status: firing
+    description: "All alerts active minus service1"
+  - runs: 20
+    repeat: 10s
+    alerts:
+    - ref: service1-warning
+      status: firing
+    - ref: service1-critical
+      status: firing
+    - ref: service2-warning
+      status: firing
+    - ref: service2-critical
+      status: firing
+    description: "All alerts active"
+  - runs: 20
+    repeat: 10s
+    alerts:
+    - ref: service1-warning
+      status: firing
+    - ref: service1-critical
+      status: firing
+    - ref: service2-warning
+      status: resolved
+    - ref: service2-critical
+      status: resolved
+    description: "All alerts active minus service2"
+  - runs: 5
+    repeat: 10s
+    alerts:
+    - ref: service1-warning
+      status: resolved
+    - ref: service1-critical
+      status: resolved
+    - ref: service2-warning
+      status: resolved
+    - ref: service2-critical
+      status: resolved
+    description: "All alerts resolved"
