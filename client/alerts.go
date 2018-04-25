@@ -3,7 +3,7 @@ package client
 import (
 	"time"
 
-	"github.com/prometheus/alertmanager/cli"
+	"github.com/prometheus/alertmanager/client"
 )
 
 // Builder generates full-fledged alerts.
@@ -17,20 +17,20 @@ func NewBuilder() *Builder {
 }
 
 // CreateAlert returns a single alert.
-func (b *Builder) CreateAlert(lbls, anns map[string]string, start, end time.Time) cli.Alert {
-	alert := cli.Alert{
-		Labels:       cli.LabelSet{},
-		Annotations:  cli.LabelSet{},
+func (b *Builder) CreateAlert(lbls, anns map[string]string, start, end time.Time) client.Alert {
+	alert := client.Alert{
+		Labels:       client.LabelSet{},
+		Annotations:  client.LabelSet{},
 		StartsAt:     start,
 		EndsAt:       end,
 		GeneratorURL: b.generator,
 	}
 
 	for k, v := range lbls {
-		alert.Labels[cli.LabelName(k)] = cli.LabelValue(v)
+		alert.Labels[client.LabelName(k)] = client.LabelValue(v)
 	}
 	for k, v := range anns {
-		alert.Annotations[cli.LabelName(k)] = cli.LabelValue(v)
+		alert.Annotations[client.LabelName(k)] = client.LabelValue(v)
 	}
 
 	return alert

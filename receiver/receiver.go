@@ -9,7 +9,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/prometheus/alertmanager/cli"
+	amcli "github.com/prometheus/alertmanager/client"
 )
 
 // Notification represents an AlertManager notification.
@@ -18,10 +18,11 @@ type Notification struct {
 	GroupKey     string            `json:"groupKey"`
 	Receiver     string            `json:"receiver"`
 	Status       string            `json:"status"`
-	Alerts       []cli.Alert       `json:"alerts"`
+	Alerts       []amcli.Alert     `json:"alerts"`
 	GroupLabels  map[string]string `json:"groupLabels"`
 	CommonLabels map[string]string `json:"commonLabels"`
 	CommonAnns   map[string]string `json:"commonAnnotations"`
+	ExternalURL  string            `json:"externalURL"`
 }
 
 // Webhook proceses and stores notifications from AlertManager.
@@ -53,7 +54,7 @@ func (w *Webhook) serve(_ http.ResponseWriter, r *http.Request) {
 	}
 	nf.Timestamp = time.Now().UTC()
 	w.nf = append(w.nf, nf)
-	w.l.Printf("msg=%q gkey=%q status=%q", "received notification", nf.GroupKey, nf.Status)
+	w.l.Printf("msg=%q gkey=%q status=%q am=%s", "received notification", nf.GroupKey, nf.Status, nf.ExternalURL)
 }
 
 // Run runs the webhook receiver.

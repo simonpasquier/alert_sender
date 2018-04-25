@@ -22,7 +22,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/prometheus/alertmanager/cli"
+	amcli "github.com/prometheus/alertmanager/client"
 
 	"github.com/simonpasquier/alert_sender/client"
 )
@@ -51,9 +51,9 @@ func init() {
 	flag.StringVar(&endsAt, "end", "", "End time of the alerts (RFC3339 format). If empty, the end time isn't set. It can be a duration relative to the start time or 'now'.")
 }
 
-func buildAlertSlice(n int, lbls, anns string, start, end time.Time) []cli.Alert {
+func buildAlertSlice(n int, lbls, anns string, start, end time.Time) []amcli.Alert {
 	builder := client.NewBuilder()
-	alerts := make([]cli.Alert, n)
+	alerts := make([]amcli.Alert, n)
 
 	labels, annotations := map[string]string{}, map[string]string{}
 	for _, s := range re.FindAllStringSubmatch(lbls, -1) {

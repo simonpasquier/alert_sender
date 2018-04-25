@@ -6,7 +6,7 @@ import (
 	"log"
 	"time"
 
-	"github.com/prometheus/alertmanager/cli"
+	"github.com/prometheus/alertmanager/client"
 	"github.com/prometheus/client_golang/api"
 )
 
@@ -30,13 +30,13 @@ func NewSender(runs, batch int, interval time.Duration, l *log.Logger) *Sender {
 
 // Version returns the version of the AlertManager instance.
 func Version(am string) (string, error) {
-	client, err := api.NewClient(api.Config{
+	c, err := api.NewClient(api.Config{
 		Address: fmt.Sprintf("http://%s", am),
 	})
 	if err != nil {
 		return "", fmt.Errorf("failed to create client: %s: %s", am, err)
 	}
-	status := cli.NewStatusAPI(client)
+	status := client.NewStatusAPI(c)
 	ctx := context.Background()
 	s, err := status.Get(ctx)
 	if err != nil {
@@ -48,16 +48,16 @@ func Version(am string) (string, error) {
 }
 
 // Send sends alerts to the AlertManager instances.
-func (a *Sender) Send(ams []string, alerts []cli.Alert) error {
+func (a *Sender) Send(ams []string, alerts []client.Alert) error {
 	var alertmanagers []api.Client
 	for _, am := range ams {
-		client, err := api.NewClient(api.Config{
+		c, err := api.NewClient(api.Config{
 			Address: fmt.Sprintf("http://%s", am),
 		})
 		if err != nil {
 			return fmt.Errorf("failed to create client: %s: %s", am, err)
 		}
-		alertmanagers = append(alertmanagers, client)
+		alertmanagers = append(alertmanagers, c)
 	}
 
 	sleep := time.NewTimer(0)
@@ -78,7 +78,7 @@ func (a *Sender) Send(ams []string, alerts []cli.Alert) error {
 
 			ctx, cancel := context.WithTimeout(context.Background(), a.interval)
 			for _, am := range alertmanagers {
-				alertAPI := cli.NewAlertAPI(am)
+				alertAPI := client.NewAlertAPI(am)
 				if err := alertAPI.Push(ctx, slice[:upper]...); err != nil {
 					log.Println("error sending alerts:", err)
 				}

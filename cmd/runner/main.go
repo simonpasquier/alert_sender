@@ -21,10 +21,11 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"time"
 
-	"github.com/prometheus/alertmanager/cli"
+	amcli "github.com/prometheus/alertmanager/client"
 	"gopkg.in/yaml.v2"
 
 	"github.com/simonpasquier/alert_sender/client"
@@ -121,18 +122,23 @@ func main() {
 	go wh.Run(listen)
 
 	for _, s := range p.Steps {
-		alerts := make([]cli.Alert, len(s.Alerts))
+		alerts := make([]amcli.Alert, len(s.Alerts))
 		for i, a := range s.Alerts {
 			t, ok := p.Templates[a.Ref]
 			if !ok {
 				l.Printf("msg=%q", fmt.Sprintf("cannot find reference: %s", a.Ref))
 				continue
 			}
-			if t.StartsAt.IsZero() && a.Status == statusFiring {
-				t.StartsAt = time.Now()
-			}
-			if t.EndsAt.IsZero() && a.Status == statusResolved {
-				t.EndsAt = time.Now()
+			switch a.Status {
+			case statusFiring:
+				if !t.EndsAt.IsZero() {
+					t.StartsAt = time.Now()
+				}
+				t.EndsAt = time.Time{}
+			case statusResolved:
+				if t.EndsAt.IsZero() {
+					t.EndsAt = time.Now()
+				}
 			}
 			alerts[i] = builder.CreateAlert(t.Labels, t.Annotations, t.StartsAt, t.EndsAt)
 		}
@@ -158,10 +164,28 @@ func main() {
 	defer f.Close()
 	wr := bufio.NewWriter(f)
 	defer wr.Flush()
+
+	// Bucketize notifications by group key.
+	groupKeys := []string{}
+	nfByGroupKey := map[string][]receiver.Notification{}
 	for _, nf := range wh.Notifications() {
-		fmt.Fprintf(wr, "ts=%q status=%q gkey=%q nb_alerts=%d\n", nf.Timestamp, nf.Status, nf.GroupKey, len(nf.Alerts))
-		for _, a := range nf.Alerts {
-			fmt.Fprintf(wr, "\tstart=%q end=%q labels=%q\n", a.StartsAt, a.EndsAt, a.Labels)
+		if _, ok := nfByGroupKey[nf.GroupKey]; !ok {
+			nfByGroupKey[nf.GroupKey] = make([]receiver.Notification, 0)
+			groupKeys = append(groupKeys, nf.GroupKey)
 		}
+		nfByGroupKey[nf.GroupKey] = append(nfByGroupKey[nf.GroupKey], nf)
+	}
+	sort.Strings(groupKeys)
+
+	for _, gk := range groupKeys {
+		fmt.Fprintf(wr, "gkey=%q\n", gk)
+		for _, nf := range nfByGroupKey[gk] {
+			fmt.Fprintf(wr, "\tts=%q status=%q url=%q nb_alerts=%d\n", nf.Timestamp, nf.Status, nf.ExternalURL, len(nf.Alerts))
+			for _, a := range nf.Alerts {
+				fmt.Fprintf(wr, "\t\tstart=%q end=%q labels=%q\n", a.StartsAt, a.EndsAt, a.Labels)
+			}
+			fmt.Fprintf(wr, "\n")
+		}
+		fmt.Fprintf(wr, "\n")
 	}
 }
