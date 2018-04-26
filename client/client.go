@@ -28,23 +28,39 @@ func NewSender(runs, batch int, interval time.Duration, l *log.Logger) *Sender {
 	}
 }
 
-// Version returns the version of the AlertManager instance.
-func Version(am string) (string, error) {
+func getStatus(am string) (*client.ServerStatus, error) {
 	c, err := api.NewClient(api.Config{
 		Address: fmt.Sprintf("http://%s", am),
 	})
 	if err != nil {
-		return "", fmt.Errorf("failed to create client: %s: %s", am, err)
+		return nil, fmt.Errorf("failed to create client: %s: %s", am, err)
 	}
 	status := client.NewStatusAPI(c)
 	ctx := context.Background()
 	s, err := status.Get(ctx)
 	if err != nil {
-		return "", fmt.Errorf("failed to query client: %s: %s", am, err)
+		return nil, fmt.Errorf("failed to query client: %s: %s", am, err)
 	}
+	return s, nil
+}
 
+// Version returns the version of the AlertManager instance.
+func Version(am string) (string, error) {
+	s, err := getStatus(am)
+	if err != nil {
+		return "", err
+	}
 	info := s.VersionInfo
 	return fmt.Sprintf("%s (branch: %s, rev: %s)", info["version"], info["branch"], info["revision"]), nil
+}
+
+// Configuration returns the configuration of the AlertManager instance.
+func Configuration(am string) (string, error) {
+	s, err := getStatus(am)
+	if err != nil {
+		return "", err
+	}
+	return s.ConfigYAML, nil
 }
 
 // Send sends alerts to the AlertManager instances.

@@ -109,12 +109,18 @@ func main() {
 	}
 
 	alertmanagers := strings.Split(ams, ",")
+	info := [][]string{}
 	for _, am := range alertmanagers {
 		version, err := client.Version(am)
 		if err != nil {
 			l.Fatalf("fail to query alertmanager: %s", err)
 		}
 		l.Printf("address=%q version=%q", am, version)
+		config, err := client.Configuration(am)
+		if err != nil {
+			l.Fatalf("fail to query alertmanager: %s", err)
+		}
+		info = append(info, []string{am, version, config})
 	}
 
 	builder := client.NewBuilder()
@@ -180,6 +186,12 @@ func main() {
 	}
 	sort.Strings(groupKeys)
 
+	fmt.Fprintf(wr, "plan=%q\n", planFile)
+	for _, v := range info {
+		fmt.Fprintf(wr, "am=%q version=%q config=%q\n\n", v[0], v[1], v[2])
+	}
+
+	fmt.Fprintf(wr, "plan=%q\n\n", planFile)
 	for _, gk := range groupKeys {
 		fmt.Fprintf(wr, "gkey=%q\n", gk)
 		for _, nf := range nfByGroupKey[gk] {
