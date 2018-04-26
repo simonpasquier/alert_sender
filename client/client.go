@@ -80,11 +80,11 @@ func (a *Sender) Send(ams []string, alerts []client.Alert) error {
 			for _, am := range alertmanagers {
 				alertAPI := client.NewAlertAPI(am)
 				if err := alertAPI.Push(ctx, slice[:upper]...); err != nil {
-					log.Println("error sending alerts:", err)
+					a.l.Println("error sending alerts:", err)
 				}
 				select {
 				case <-ctx.Done():
-					log.Println("context time-out")
+					a.l.Println("context time-out")
 					continue
 				default:
 				}

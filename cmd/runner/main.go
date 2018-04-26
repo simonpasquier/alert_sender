@@ -129,6 +129,9 @@ func main() {
 				l.Printf("msg=%q", fmt.Sprintf("cannot find reference: %s", a.Ref))
 				continue
 			}
+			if t.StartsAt.IsZero() {
+				t.StartsAt = time.Now()
+			}
 			switch a.Status {
 			case statusFiring:
 				if !t.EndsAt.IsZero() {
