@@ -41,7 +41,7 @@ var (
 func init() {
 	flag.BoolVar(&help, "help", false, "Help message")
 	flag.StringVar(&ams, "addresses", "", "Comma-separated list of AlertManager servers.")
-	flag.StringVar(&lbls, "labels", "AlertName=HighLatency,service=my-service,instance=instance-{{i}}", "Comma-separated list of alert's labels.")
+	flag.StringVar(&lbls, "labels", "AlertName=HighLatency,job=my-service,instance=instance-{{i}}", "Comma-separated list of alert's labels.")
 	flag.StringVar(&anns, "annotations", "Summary=\"High Latency\",Description=\"Latency is high!\"", "Comma-separated list of alert's annotations.")
 	flag.IntVar(&runs, "runs", 1, "Total number of runs.")
 	flag.IntVar(&num, "num", 1, "Total number of alerts to be sent at every run.")
