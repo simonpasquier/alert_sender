@@ -1,0 +1,15 @@
+global:
+  resolve_timeout: 5m
+
+route:
+  group_by: [job]
+  group_wait: 20s
+  group_interval: 60s
+  repeat_interval: 10m
+  receiver: 'web.hook'
+
+receivers:
+- name: 'web.hook'
+  webhook_configs:
+  - url: 'http://127.0.0.1:8080/'
+    #send_resolved: false

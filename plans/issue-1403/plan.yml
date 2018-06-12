@@ -1,0 +1,75 @@
+# Plan for testing inhibited alerts
+---
+templates:
+  service1-latency:
+    labels:
+      alertname: HighLatency
+      job: service1
+      instance: instance1
+    annotations:
+      description: Latency is high!
+      summary: High latency
+  service1-errors:
+    labels:
+      alertname: TooManyErrors
+      job: service1
+      instance: instance1
+    annotations:
+      description: Error rate is too high!
+      summary: Too many errors
+
+steps:
+  - runs: 3
+    repeat: 10s
+    alerts:
+    - ref: service1-latency
+      status: firing
+    description: "Latency firing"
+  - runs: 8
+    repeat: 10s
+    alerts:
+    - ref: service1-latency
+      status: firing
+    - ref: service1-errors
+      status: firing
+    description: "Latency and errors firing"
+  - runs: 8
+    repeat: 10s
+    alerts:
+    - ref: service1-latency
+      status: firing
+    - ref: service1-errors
+      status: resolved
+    description: "Errors resolved"
+  - runs: 8
+    repeat: 10s
+    alerts:
+    - ref: service1-latency
+      status: firing
+    - ref: service1-errors
+      status: firing
+    description: "Latency and errors firing"
+  - runs: 8
+    repeat: 10s
+    alerts:
+    - ref: service1-latency
+      status: resolved
+    - ref: service1-errors
+      status: resolved
+    description: "Latency and errors resolved"
+  - runs: 0
+    repeat: 10s
+    alerts: []
+    description: "No alert"
+  - runs: 8
+    repeat: 10s
+    alerts:
+    - ref: service1-latency
+      status: firing
+    description: "Latency firing"
+  - runs: 8
+    repeat: 10s
+    alerts:
+    - ref: service1-latency
+      status: resolved
+    description: "Latency resolved"
