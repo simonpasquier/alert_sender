@@ -162,6 +162,7 @@ func main() {
 	time.Sleep(10 * time.Second)
 	wh.Stop()
 
+	// Report received notifications.
 	now := time.Now().UTC()
 	fname := filepath.Base(planFile)
 	fname = strings.TrimSuffix(fname, filepath.Ext(fname))
@@ -197,7 +198,11 @@ func main() {
 		for _, nf := range nfByGroupKey[gk] {
 			fmt.Fprintf(wr, "\tts=%q status=%q url=%q nb_alerts=%d\n", nf.Timestamp, nf.Status, nf.ExternalURL, len(nf.Alerts))
 			for _, a := range nf.Alerts {
-				fmt.Fprintf(wr, "\t\tstart=%q end=%q labels=%q\n", a.StartsAt, a.EndsAt, a.Labels)
+				status := "firing"
+				if a.StartsAt.Before(a.EndsAt) {
+					status = "resolved"
+				}
+				fmt.Fprintf(wr, "\t\tstatus=%q start=%q end=%q labels=%q\n", status, a.StartsAt, a.EndsAt, a.Labels)
 			}
 			fmt.Fprintf(wr, "\n")
 		}
