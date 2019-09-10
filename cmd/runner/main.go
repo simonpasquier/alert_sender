@@ -25,9 +25,9 @@ import (
 	"strings"
 	"time"
 
-	amcli "github.com/prometheus/alertmanager/client"
 	"gopkg.in/yaml.v2"
 
+	"github.com/prometheus/alertmanager/api/v2/models"
 	"github.com/simonpasquier/alert_sender/client"
 	"github.com/simonpasquier/alert_sender/receiver"
 )
@@ -128,7 +128,7 @@ func main() {
 	go wh.Run(listen)
 
 	for _, s := range p.Steps {
-		alerts := make([]amcli.Alert, len(s.Alerts))
+		alerts := make([]*models.PostableAlert, len(s.Alerts))
 		for i, a := range s.Alerts {
 			t, ok := p.Templates[a.Ref]
 			if !ok {

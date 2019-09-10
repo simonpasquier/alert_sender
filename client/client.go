@@ -6,8 +6,12 @@ import (
 	"log"
 	"time"
 
-	"github.com/prometheus/alertmanager/client"
-	"github.com/prometheus/client_golang/api"
+	clientruntime "github.com/go-openapi/runtime/client"
+	"github.com/go-openapi/strfmt"
+	"github.com/prometheus/alertmanager/api/v2/client"
+	"github.com/prometheus/alertmanager/api/v2/client/alert"
+	"github.com/prometheus/alertmanager/api/v2/client/general"
+	"github.com/prometheus/alertmanager/api/v2/models"
 )
 
 // Sender is used to send alerts on a regular basis.
@@ -28,20 +32,15 @@ func NewSender(runs, batch int, interval time.Duration, l *log.Logger) *Sender {
 	}
 }
 
-func getStatus(am string) (*client.ServerStatus, error) {
-	c, err := api.NewClient(api.Config{
-		Address: fmt.Sprintf("http://%s", am),
-	})
-	if err != nil {
-		return nil, fmt.Errorf("failed to create client: %s: %s", am, err)
-	}
-	status := client.NewStatusAPI(c)
-	ctx := context.Background()
-	s, err := status.Get(ctx)
+func getStatus(am string) (*models.AlertmanagerStatus, error) {
+	cr := clientruntime.New(am, "/api/v2", []string{"http"})
+	c := client.New(cr, strfmt.Default)
+
+	status, err := c.General.GetStatus(general.NewGetStatusParams())
 	if err != nil {
 		return nil, fmt.Errorf("failed to query client: %s: %s", am, err)
 	}
-	return s, nil
+	return status.Payload, nil
 }
 
 // Version returns the version of the AlertManager instance.
@@ -51,7 +50,7 @@ func Version(am string) (string, error) {
 		return "", err
 	}
 	info := s.VersionInfo
-	return fmt.Sprintf("%s (branch: %s, rev: %s)", info["version"], info["branch"], info["revision"]), nil
+	return fmt.Sprintf("%s (branch: %s, rev: %s)", *info.Version, *info.Branch, *info.Revision), nil
 }
 
 // Configuration returns the configuration of the AlertManager instance.
@@ -60,20 +59,15 @@ func Configuration(am string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return s.ConfigYAML, nil
+	return *s.Config.Original, nil
 }
 
 // Send sends alerts to the AlertManager instances.
-func (a *Sender) Send(ams []string, alerts []client.Alert) error {
-	var alertmanagers []api.Client
+func (a *Sender) Send(ams []string, alerts models.PostableAlerts) error {
+	var alertmanagers []*client.Alertmanager
 	for _, am := range ams {
-		c, err := api.NewClient(api.Config{
-			Address: fmt.Sprintf("http://%s", am),
-		})
-		if err != nil {
-			return fmt.Errorf("failed to create client: %s: %s", am, err)
-		}
-		alertmanagers = append(alertmanagers, c)
+		cr := clientruntime.New(am, "/api/v2", []string{"http"})
+		alertmanagers = append(alertmanagers, client.New(cr, strfmt.Default))
 	}
 
 	sleep := time.NewTimer(0)
@@ -94,15 +88,9 @@ func (a *Sender) Send(ams []string, alerts []client.Alert) error {
 
 			ctx, cancel := context.WithTimeout(context.Background(), a.interval)
 			for _, am := range alertmanagers {
-				alertAPI := client.NewAlertAPI(am)
-				if err := alertAPI.Push(ctx, slice[:upper]...); err != nil {
+				alertParams := alert.NewPostAlertsParams().WithContext(ctx).WithAlerts(slice[:upper])
+				if _, err := am.Alert.PostAlerts(alertParams); err != nil {
 					a.l.Println("error sending alerts:", err)
-				}
-				select {
-				case <-ctx.Done():
-					a.l.Println("context time-out")
-					continue
-				default:
 				}
 			}
 

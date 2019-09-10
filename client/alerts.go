@@ -3,7 +3,8 @@ package client
 import (
 	"time"
 
-	"github.com/prometheus/alertmanager/client"
+	"github.com/go-openapi/strfmt"
+	"github.com/prometheus/alertmanager/api/v2/models"
 )
 
 // Builder generates full-fledged alerts.
@@ -17,21 +18,14 @@ func NewBuilder() *Builder {
 }
 
 // CreateAlert returns a single alert.
-func (b *Builder) CreateAlert(lbls, anns map[string]string, start, end time.Time) client.Alert {
-	alert := client.Alert{
-		Labels:       client.LabelSet{},
-		Annotations:  client.LabelSet{},
-		StartsAt:     start,
-		EndsAt:       end,
-		GeneratorURL: b.generator,
+func (b *Builder) CreateAlert(lbls, anns map[string]string, start, end time.Time) *models.PostableAlert {
+	return &models.PostableAlert{
+		Annotations: anns,
+		StartsAt:    strfmt.DateTime(start),
+		EndsAt:      strfmt.DateTime(end),
+		Alert: models.Alert{
+			Labels:       lbls,
+			GeneratorURL: strfmt.URI(b.generator),
+		},
 	}
-
-	for k, v := range lbls {
-		alert.Labels[client.LabelName(k)] = client.LabelValue(v)
-	}
-	for k, v := range anns {
-		alert.Annotations[client.LabelName(k)] = client.LabelValue(v)
-	}
-
-	return alert
 }

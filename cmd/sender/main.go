@@ -22,7 +22,7 @@ import (
 	"strings"
 	"time"
 
-	amcli "github.com/prometheus/alertmanager/client"
+	"github.com/prometheus/alertmanager/api/v2/models"
 
 	"github.com/simonpasquier/alert_sender/client"
 )
@@ -51,11 +51,11 @@ func init() {
 	flag.StringVar(&endsAt, "end", "", "End time of the alerts (RFC3339 format). If empty, the end time isn't set. It can be a duration relative to the start time or 'now'.")
 }
 
-func buildAlertSlice(n int, lbls, anns string, start, end time.Time) []amcli.Alert {
+func buildAlertSlice(n int, lbls, anns string, start, end time.Time) models.PostableAlerts {
 	builder := client.NewBuilder()
-	alerts := make([]amcli.Alert, n)
+	alerts := make([]*models.PostableAlert, n)
 
-	labels, annotations := map[string]string{}, map[string]string{}
+	labels, annotations := make(map[string]string), make(map[string]string)
 	for _, s := range re.FindAllStringSubmatch(lbls, -1) {
 		labels[s[1]] = s[2]
 	}
@@ -64,7 +64,7 @@ func buildAlertSlice(n int, lbls, anns string, start, end time.Time) []amcli.Ale
 	}
 
 	expand := func(i int, m map[string]string) map[string]string {
-		set := map[string]string{}
+		set := make(map[string]string)
 		for k, v := range m {
 			k = strings.Replace(k, "{{i}}", fmt.Sprintf("%d", i), -1)
 			v = strings.Replace(v, "{{i}}", fmt.Sprintf("%d", i), -1)
