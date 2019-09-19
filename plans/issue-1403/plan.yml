@@ -1,4 +1,17 @@
-# Plan for testing inhibited alerts
+# Plan for testing that notifications honor send_resolved properly.
+#
+# With send_resolved: true
+#
+#  11:45 -> Received notification of service 1 and 3 down
+#  12:00 -> Restored service 3
+#  ~12:02 -> Received notification of service 1 down, service 3 solved
+#  ~18:02 -> Received notification of service 1 down
+#
+# With send_resolved: false
+#
+#  11:45 -> Received notification of service 1 and 3 down
+#  12:00 -> Restored service 3
+#  ~17:45 -> Received notification of service 1 down
 ---
 templates:
   service1-latency:

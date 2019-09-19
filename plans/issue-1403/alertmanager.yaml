@@ -3,9 +3,9 @@ global:
 
 route:
   group_by: [job]
-  group_wait: 20s
-  group_interval: 60s
-  repeat_interval: 10m
+  group_wait: 0s
+  group_interval: 61s
+  repeat_interval: 10h
   receiver: 'web.hook'
 
 receivers:
