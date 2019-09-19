@@ -143,7 +143,11 @@ func main() {
 				if !t.EndsAt.IsZero() {
 					t.StartsAt = time.Now()
 				}
-				t.EndsAt = time.Time{}
+				offset := s.Repeat * 3
+				if offset == 0 {
+					offset = time.Duration(3 * time.Minute)
+				}
+				t.EndsAt = t.StartsAt.Add(offset)
 			case statusResolved:
 				if t.EndsAt.IsZero() {
 					t.EndsAt = time.Now()
