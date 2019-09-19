@@ -1,0 +1,30 @@
+# Plan for testing that resolved notifications don't get dropped.
+# AlertManager modified to garbage collect alerts in the store every minute.
+---
+templates:
+  service1-latency:
+    labels:
+      alertname: HighLatency
+      job: service1
+      instance: instance1
+    annotations:
+      description: Latency is high!
+      summary: High latency
+
+steps:
+  - runs: 15
+    repeat: 59s
+    alerts:
+    - ref: service1-latency
+      status: firing
+    description: "Latency firing"
+  - runs: 3
+    repeat: 3s
+    alerts:
+    - ref: service1-latency
+      status: resolved
+    description: "Latency resolved"
+  - runs: 2
+    repeat: 120s
+    alerts: []
+    description: "No alert"
