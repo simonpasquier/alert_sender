@@ -135,6 +135,7 @@ func main() {
 				l.Printf("msg=%q", fmt.Sprintf("cannot find reference: %s", a.Ref))
 				continue
 			}
+			// TODO: need finer control of startsat/endsat
 			if t.StartsAt.IsZero() {
 				t.StartsAt = time.Now()
 			}
