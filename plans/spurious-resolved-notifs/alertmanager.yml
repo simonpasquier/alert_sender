@@ -1,0 +1,17 @@
+global:
+  resolve_timeout: 10h
+
+route:
+  group_by: [instance]
+  group_wait: 0s
+  group_interval: 20s
+  repeat_interval: 10h
+  receiver: 'web.hook'
+
+receivers:
+- name: 'web.hook'
+  webhook_configs:
+  - url: 'http://127.0.0.1:8081/'
+    send_resolved: true
+  - url: 'http://127.0.0.1:8080/api/notifications/'
+    send_resolved: true
